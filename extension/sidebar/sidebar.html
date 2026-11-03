@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>پرسش از هرمس</title>
+    <link rel="stylesheet" href="sidebar.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">پرسش از هرمس</span>
+      <span class="actions">
+        <button id="clear" type="button" title="پاک کردن گفتگو و شروع یک نشست تازه">پاک کردن</button>
+        <span id="status" class="status" title="وضعیت بریج">●</span>
+      </span>
+    </header>
+
+    <main id="log" aria-live="polite"></main>
+
+    <footer>
+      <div class="context">
+        <label><input type="radio" name="ctx" value="page" checked /> کل صفحه</label>
+        <label><input type="radio" name="ctx" value="selection" disabled /> انتخاب</label>
+        <span id="preview" class="preview" hidden></span>
+      </div>
+      <textarea id="q" rows="3" placeholder="پرسشت را بنویس… (Enter می‌فرستد، Shift+Enter خط تازه)"></textarea>
+      <button id="send" type="button">بفرست</button>
+    </footer>
+
+    <script src="markdown.js"></script>
+    <script src="sidebar.js"></script>
+  </body>
+</html>

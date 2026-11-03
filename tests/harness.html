@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>markdown harness</title>
+    <link rel="stylesheet" href="../extension/sidebar/sidebar.css" />
+    <style>
+      body { padding: 12px; }
+      .msg { border: 1px solid var(--line); margin-bottom: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="msg assistant" id="out"></div>
+    <script src="../extension/sidebar/markdown.js"></script>
+    <script>
+      // Sample answer mixing directions: rendered exactly as the sidebar renders it.
+      const sample = `## خلاصه خبر
+
+Microsoft announced a new browser release **next week**; تمرکز اصلی آن حریم خصوصی است.
+
+- گزینه اول: حالت سخت‌گیرانه ردیابی
+- Second item, English only
+- گزینه سوم با \`dir="auto"\` در متن
+
+| مورد | value |
+|---|---|
+| مرورگر | Edge |
+| engine | Chromium |
+
+\`\`\`js
+const dir = "فارسی"; // code stays LTR
+\`\`\`
+
+> نقل قول کوتاه از صفحه
+
+پاراگراف آخر.`;
+      document.getElementById('out').innerHTML = window.HermesMarkdown.render(sample);
+    </script>
+  </body>
+</html>

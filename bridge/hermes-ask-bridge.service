@@ -1,0 +1,15 @@
+[Unit]
+Description=Hermes «ask about this page» bridge (Firefox add-on)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=__BRIDGE__
+WorkingDirectory=%h
+Environment=HERMES_ASK_PORT=8790
+Environment=HERMES_BIN=%h/.local/bin/hermes
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
