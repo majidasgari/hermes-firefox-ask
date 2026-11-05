@@ -59,6 +59,28 @@ File…*. While developing, `about:debugging#/runtime/this-firefox` → *Load Te
 - **whole page**: open the sidebar (toolbar button or `Alt+Shift+H`) with *Whole page* selected.
 - Follow-ups stay in one Hermes session; switching tab starts a new one; **Clear** empties the panel.
 - The dot in the header is the bridge's health. Red = `systemctl --user status hermes-ask-bridge`.
+- **Copy** under an answer puts the raw markdown on the clipboard.
+
+## Actions (buttons under a message or under the chat)
+
+⚙ in the header opens the options page. Every action is one line, `label | prompt`:
+
+```
+خلاصه | این متن را در سه جمله خلاصه کن.
+ترجمه | این متن را به فارسی روان ترجمه کن.
+```
+
+Two lists:
+
+| list | where the buttons appear | what is sent |
+|---|---|---|
+| **under each message** | a pill row under every question and answer | that message's markdown + the prompt |
+| **under each chat** | a pill row above the composer | the selected text (or the whole page) + the prompt |
+
+The same list lives in `~/.config/hermes-firefox-ask/actions.json` (the bridge owns it, `GET/PUT
+/actions`), so it can be edited there with any text editor. Defaults are created on first run; empty
+prompts are dropped. Edited actions show up in the sidebar the next time it takes focus — no need to
+reopen the panel.
 
 ## What is sent
 
@@ -99,6 +121,7 @@ extension/manifest.json       MV3, sidebar_action, content script on <all_urls>
 extension/background.js       context menu, pending selection, page-context fetch
 extension/content/content.js  selection bubble (shadow DOM) + text collector
 extension/sidebar/            the panel: sidebar.{html,css,js} + markdown.js
+extension/options/            action editor (options_ui)
 bridge/hermes_ask_bridge.py   HTTP -> `hermes chat --oneshot -Q -t web --source cli --ignore-rules`
 tools/                        install.sh, build.sh, amo-sign.py, make_icons.py
 tests/                        jsdom tests + render harness

@@ -9,6 +9,7 @@
     <header>
       <span class="brand">پرسش از هرمس</span>
       <span class="actions">
+        <button id="settings" type="button" title="تنظیم اکشن‌ها">⚙</button>
         <button id="clear" type="button" title="پاک کردن گفتگو و شروع یک نشست تازه">پاک کردن</button>
         <span id="status" class="status" title="وضعیت بریج">●</span>
       </span>
@@ -22,6 +23,7 @@
         <label><input type="radio" name="ctx" value="selection" disabled /> انتخاب</label>
         <span id="preview" class="preview" hidden></span>
       </div>
+      <div id="chat-actions" class="chat-actions" hidden></div>
       <textarea id="q" rows="3" placeholder="پرسشت را بنویس… (Enter می‌فرستد، Shift+Enter خط تازه)"></textarea>
       <button id="send" type="button">بفرست</button>
     </footer>

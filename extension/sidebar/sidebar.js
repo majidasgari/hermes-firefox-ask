@@ -8,11 +8,14 @@ const statusEl = document.getElementById('status');
 const previewEl = document.getElementById('preview');
 const selectionRadio = document.querySelector('input[name="ctx"][value="selection"]');
 const pageRadio = document.querySelector('input[name="ctx"][value="page"]');
+const chatActionsEl = document.getElementById('chat-actions');
 
 let hermesSession = null;
 let pendingSelection = '';
 let busy = false;
 let userPicked = false;
+let messageActions = []; // {label, prompt} — one row of buttons under every message
+let chatActions = []; // {label, prompt} — one row of buttons above the composer
 
 function renderText(el, text) {
   // Markdown → HTML, with per-block RTL/LTR decided inside HermesMarkdown.
@@ -39,8 +42,6 @@ function copyText(text) {
 }
 
 function copyButton(text) {
-  const actions = document.createElement('div');
-  actions.className = 'msg-actions';
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'copy';
@@ -52,15 +53,34 @@ function copyButton(text) {
       btn.textContent = 'کپی';
     }, 1500);
   });
-  actions.append(btn);
-  return actions;
+  return btn;
+}
+
+function actionButton(action, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'act';
+  btn.textContent = action.label;
+  btn.title = action.prompt;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function actionRow(role, text) {
+  const row = document.createElement('div');
+  row.className = 'msg-actions';
+  messageActions.forEach((action) => row.append(actionButton(action, () => send(action.prompt, text))));
+  if (role === 'assistant') row.append(copyButton(text));
+  return row.childElementCount ? row : null;
 }
 
 function addMessage(role, text) {
   const el = document.createElement('div');
   el.className = 'msg ' + role;
   renderText(el, text);
-  if (role === 'assistant' && text !== '…') el.append(copyButton(text));
+  const actionable = (role === 'assistant' || role === 'user') && text !== '…' && String(text).trim();
+  const row = actionable ? actionRow(role, text) : null;
+  if (row) el.append(row);
   logEl.append(el);
   logEl.scrollTop = logEl.scrollHeight;
   return el;
@@ -80,6 +100,25 @@ async function checkHealth() {
     setStatus('down');
     return false;
   }
+}
+
+async function loadActions() {
+  try {
+    const res = await fetch(BRIDGE + '/actions', { cache: 'no-store' });
+    const data = await res.json();
+    messageActions = Array.isArray(data.message) ? data.message : [];
+    chatActions = Array.isArray(data.chat) ? data.chat : [];
+  } catch (err) {
+    messageActions = [];
+    chatActions = [];
+  }
+  renderChatActions();
+}
+
+function renderChatActions() {
+  chatActionsEl.replaceChildren();
+  chatActions.forEach((action) => chatActionsEl.append(actionButton(action, () => send(action.prompt))));
+  chatActionsEl.hidden = chatActions.length === 0;
 }
 
 function showPreview(text) {
@@ -107,10 +146,22 @@ async function refreshContext() {
 
 async function ask() {
   const question = questionEl.value.trim();
+  if (!question || busy) return; // keep the text if a turn is still running
+  questionEl.value = '';
+  await send(question);
+}
+
+// selectionOverride: the text a message action is about; undefined = follow the page/selection choice.
+async function send(question, selectionOverride) {
   if (!question || busy) return;
   const ctx = (await browser.runtime.sendMessage({ type: 'get-context' })) || {};
-  const useSelection = selectionRadio.checked;
-  const selection = useSelection ? (ctx.selection || pendingSelection || '').trim() : '';
+  const useSelection = selectionOverride === undefined && selectionRadio.checked;
+  const selection =
+    selectionOverride !== undefined
+      ? String(selectionOverride)
+      : useSelection
+        ? (ctx.selection || pendingSelection || '').trim()
+        : '';
   if (useSelection && !selection) {
     addMessage('note', 'چیزی در صفحه انتخاب نشده است. بخشی از متن را انتخاب کن و دوباره بپرس.');
     return;
@@ -118,7 +169,6 @@ async function ask() {
 
   busy = true;
   sendBtn.disabled = true;
-  questionEl.value = '';
   addMessage('user', question);
   const thinking = addMessage('assistant', '…');
 
@@ -153,6 +203,8 @@ async function ask() {
 }
 
 sendBtn.addEventListener('click', ask);
+
+document.getElementById('settings').addEventListener('click', () => browser.runtime.openOptionsPage());
 
 document.getElementById('clear').addEventListener('click', () => {
   logEl.replaceChildren();
@@ -203,8 +255,12 @@ browser.runtime.onMessage.addListener((msg) => {
 async function init() {
   checkHealth();
   questionEl.focus();
+  await loadActions();
   await consumePending();
   await refreshContext();
 }
+
+// Actions edited in the options page apply on the next focus, without reopening the panel.
+window.addEventListener('focus', loadActions);
 
 init();

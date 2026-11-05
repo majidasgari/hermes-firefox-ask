@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>تنظیم اکشن‌های «پرسش از هرمس»</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <h1>اکشن‌های «پرسش از هرمس»</h1>
+    <p class="hint">
+      هر خط یک اکشن است، به شکل <code>برچسب | پرامپت</code>. برچسب همان چیزی است که روی دکمه می‌آید و
+      پرامپت متن ساده‌ای است که همراه متن پیام/صفحه به هرمس فرستاده می‌شود. خط‌های خالی و خطی که با
+      <code>#</code> شروع شود نادیده گرفته می‌شوند.
+    </p>
+
+    <section>
+      <h2>زیر هر پیام</h2>
+      <p class="hint">متن همان پیام (پرسش یا پاسخ) همراه پرامپت فرستاده می‌شود.</p>
+      <textarea id="message" rows="8" spellcheck="false"></textarea>
+    </section>
+
+    <section>
+      <h2>زیر هر چت</h2>
+      <p class="hint">متن انتخاب‌شده یا کل صفحه همراه پرامپت فرستاده می‌شود.</p>
+      <textarea id="chat" rows="8" spellcheck="false"></textarea>
+    </section>
+
+    <div class="row">
+      <button id="save" type="button">ذخیره</button>
+      <span id="status" class="status"></span>
+    </div>
+
+    <p class="hint path" id="path"></p>
+    <script src="options.js"></script>
+  </body>
+</html>

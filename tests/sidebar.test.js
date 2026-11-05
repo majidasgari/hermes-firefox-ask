@@ -34,7 +34,17 @@ window.browser = {
 };
 
 window.fetch = async (url, opts = {}) => {
-  if (String(url).endsWith('/health')) return { ok: true, json: async () => ({ ok: true }) };
+  const target = String(url);
+  if (target.endsWith('/health')) return { ok: true, json: async () => ({ ok: true }) };
+  if (target.endsWith('/actions') && (opts.method || 'GET') === 'GET') {
+    return {
+      ok: true,
+      json: async () => ({
+        message: [{ label: 'خلاصه', prompt: 'این را خلاصه کن' }],
+        chat: [{ label: 'این صفحه', prompt: 'این صفحه درباره چیست؟' }],
+      }),
+    };
+  }
   posts.push(JSON.parse(opts.body));
   return { ok: true, json: async () => ({ answer: 'پاسخ آزمایشی هرمس', session: 'sess-1' }) };
 };
@@ -120,6 +130,31 @@ async function run() {
   window.document.getElementById('send').click();
   await flush();
   assert.strictEqual(posts.at(-1).session, null, 'cleared conversation must not resume the old session');
+
+  // Configured actions: one row above the composer, one under each message.
+  const chatActs = [...window.document.querySelectorAll('#chat-actions .act')];
+  assert.strictEqual(chatActs.length, 1);
+  assert.strictEqual(chatActs[0].textContent, 'این صفحه');
+
+  const lastAnswer = [...window.document.querySelectorAll('#log .msg.assistant')].at(-1);
+  const msgAct = lastAnswer.querySelector('.msg-actions .act');
+  assert.ok(msgAct, 'message action under an answer');
+  const beforeMsg = posts.length;
+  msgAct.click();
+  await flush();
+  assert.strictEqual(posts.length, beforeMsg + 1);
+  assert.strictEqual(posts.at(-1).question, 'این را خلاصه کن');
+  assert.strictEqual(posts.at(-1).selection, lastAnswer.querySelector('p').textContent, 'message text goes as the selection');
+
+  const beforeChat = posts.length;
+  const pageInput = window.document.querySelector('input[value="page"]');
+  pageInput.checked = true;
+  pageInput.dispatchEvent(new window.Event('change'));
+  chatActs[0].click();
+  await flush();
+  assert.strictEqual(posts.at(-1).question, 'این صفحه درباره چیست؟');
+  assert.strictEqual(posts.at(-1).selection, '', 'chat action uses the page, not the message');
+  assert.strictEqual(posts.length, beforeChat + 1);
 
   console.log('sidebar.test.js ok');
 }

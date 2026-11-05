@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 PORT = int(os.environ.get("HERMES_ASK_PORT", "8790"))
 HERMES = os.environ.get("HERMES_BIN", os.path.expanduser("~/.local/bin/hermes"))
@@ -26,6 +27,50 @@ TIMEOUT = 240
 # Tools are limited to `web` on purpose: the page text is untrusted input, so the
 # ask-turn must not be able to touch the filesystem or a shell.
 SESSION_RE = re.compile(r"^session_id:\s*(\S+)\s*$", re.M)
+
+ACTIONS_PATH = Path(os.environ.get(
+    "HERMES_ASK_ACTIONS", os.path.expanduser("~/.config/hermes-firefox-ask/actions.json")))
+DEFAULT_ACTIONS = {
+    "message": [
+        {"label": "خلاصه", "prompt": "این متن را در سه جمله خلاصه کن."},
+        {"label": "ترجمه", "prompt": "این متن را به فارسی روان ترجمه کن."},
+        {"label": "ساده‌تر", "prompt": "این متن را ساده و کوتاه توضیح بده."},
+    ],
+    "chat": [
+        {"label": "این صفحه چیست؟", "prompt": "این صفحه درباره چیست؟ در سه جمله خلاصه کن."},
+        {"label": "نکات کلیدی", "prompt": "سه نکته کلیدی این صفحه را با جزئیات فهرست کن."},
+    ],
+}
+
+
+def load_actions() -> dict:
+    try:
+        data = json.loads(ACTIONS_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except (OSError, ValueError):
+        pass
+    return save_actions(DEFAULT_ACTIONS)
+
+
+def save_actions(data: dict) -> dict:
+    """Keep only well-formed {label, prompt} entries; write the file, return what was stored."""
+    clean = {}
+    for group in ("message", "chat"):
+        items = data.get(group) if isinstance(data, dict) else None
+        clean[group] = [
+            {"label": str(item.get("label") or item.get("prompt", "")).strip()[:60],
+             "prompt": str(item.get("prompt", "")).strip()[:2000]}
+            for item in (items or [])
+            if isinstance(item, dict) and str(item.get("prompt", "")).strip()
+        ][:40]
+    try:
+        ACTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ACTIONS_PATH.write_text(json.dumps(clean, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass  # read-only config dir: the caller still gets the sanitized list
+    return clean
+
 
 PROMPT_HEAD = """کاربر در مرورگر این صفحه را باز کرده است:
 نشانی: {url}
@@ -40,7 +85,7 @@ def build_prompt(payload: dict) -> str:
     question = (payload.get("question") or "").strip()
     parts = [PROMPT_HEAD.format(url=page.get("url", ""), title=page.get("title", ""))]
     if selection:
-        parts.append("متنی که کاربر از صفحه انتخاب کرده (پرسش دقیقا درباره همین بخش است):\n<<<\n"
+        parts.append("متن مورد نظر کاربر (بخشی از صفحه یا یکی از پیام‌های همین گفتگو):\n<<<\n"
                      + selection[:SEL_MAX] + "\n>>>")
     elif text:
         parts.append("متن صفحه (ممکن است ناقص باشد):\n<<<\n" + text[:CTX_MAX] + "\n>>>")
@@ -108,9 +153,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):  # noqa: N802
-        if self.path.split("?")[0] != "/health":
+        path = self.path.split("?")[0]
+        if path == "/actions":
+            return self._json(200, load_actions())
+        if path != "/health":
             return self._json(404, {"error": "not_found"})
         self._json(200, {"ok": True, "hermes_bin": os.path.exists(HERMES)})
+
+    def do_PUT(self):  # noqa: N802
+        if self.path.split("?")[0] != "/actions":
+            return self._json(404, {"error": "not_found"})
+        if not self._origin_ok():
+            return self._json(403, {"error": "forbidden_origin"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, json.JSONDecodeError):
+            return self._json(400, {"error": "bad_json"})
+        self._json(200, save_actions(payload))
 
     def do_POST(self):  # noqa: N802
         if self.path.split("?")[0] != "/ask":
@@ -142,6 +202,19 @@ def selftest() -> None:
     assert len(build_prompt({**base, "selection": "x" * 99999})) < SEL_MAX + 2000
     assert _chat_cmd("f", None)[-2:] == ["--query-file", "f"]
     assert _chat_cmd("f", "abc")[-4:] == ["--resume", "abc", "--query-file", "f"]
+
+    # Actions: defaults materialise on first read, junk is dropped, empty prompts are not stored.
+    global ACTIONS_PATH
+    ACTIONS_PATH = Path(tempfile.mkdtemp(prefix="hermes-ask-actions-")) / "actions.json"
+    first = load_actions()
+    assert first["message"] and first["chat"] and ACTIONS_PATH.is_file()
+    saved = save_actions({
+        "message": [{"label": "ک", "prompt": " پرو "}, {"label": "بی‌متن", "prompt": "  "}, "junk"],
+        "chat": [{"prompt": "فقط پرامپت"}],
+    })
+    assert saved["message"] == [{"label": "ک", "prompt": "پرو"}], saved
+    assert saved["chat"] == [{"label": "فقط پرامپت", "prompt": "فقط پرامپت"}], saved
+    assert load_actions() == saved
     print("selftest ok")
 
 
