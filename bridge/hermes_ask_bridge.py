@@ -32,6 +32,7 @@ SESSION_RE = re.compile(r"^session_id:\s*(\S+)\s*$", re.M)
 
 ACTIONS_PATH = Path(os.environ.get(
     "HERMES_ASK_ACTIONS", os.path.expanduser("~/.config/hermes-firefox-ask/actions.json")))
+GROUPS = ("message", "chat", "start")
 DEFAULT_ACTIONS = {
     "message": [
         {"label": "خلاصه", "prompt": "این متن را در سه جمله خلاصه کن."},
@@ -42,23 +43,28 @@ DEFAULT_ACTIONS = {
         {"label": "این صفحه چیست؟", "prompt": "این صفحه درباره چیست؟ در سه جمله خلاصه کن."},
         {"label": "نکات کلیدی", "prompt": "سه نکته کلیدی این صفحه را با جزئیات فهرست کن."},
     ],
+    "start": [
+        {"label": "این صفحه را خلاصه کن", "prompt": "این صفحه را در چند جمله خلاصه کن."},
+    ],
 }
 
 
 def load_actions() -> dict:
     try:
         data = json.loads(ACTIONS_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
+        if not isinstance(data, dict):
+            raise ValueError("not an object")
     except (OSError, ValueError):
-        pass
-    return save_actions(DEFAULT_ACTIONS)
+        return save_actions(DEFAULT_ACTIONS)
+    # A group added in a later version is filled in from the defaults, so an existing file keeps working.
+    merged = {group: data.get(group, DEFAULT_ACTIONS[group]) for group in GROUPS}
+    return save_actions(merged)
 
 
 def save_actions(data: dict) -> dict:
     """Keep only well-formed {label, prompt} entries; write the file, return what was stored."""
     clean = {}
-    for group in ("message", "chat"):
+    for group in GROUPS:
         items = data.get(group) if isinstance(data, dict) else None
         clean[group] = [
             {"label": str(item.get("label") or item.get("prompt", "")).strip()[:60],
@@ -227,7 +233,11 @@ def selftest() -> None:
     global ACTIONS_PATH
     ACTIONS_PATH = Path(tempfile.mkdtemp(prefix="hermes-ask-actions-")) / "actions.json"
     first = load_actions()
-    assert first["message"] and first["chat"] and ACTIONS_PATH.is_file()
+    assert first["message"] and first["chat"] and first["start"] and ACTIONS_PATH.is_file()
+    # An older file without the new group still gains it, and an emptied group stays empty.
+    ACTIONS_PATH.write_text(json.dumps({"message": [], "chat": [{"label": "چ", "prompt": "پ"}]}), encoding="utf-8")
+    upgraded = load_actions()
+    assert upgraded["message"] == [] and upgraded["chat"] and upgraded["start"], upgraded
     saved = save_actions({
         "message": [{"label": "ک", "prompt": " پرو "}, {"label": "بی‌متن", "prompt": "  "}, "junk"],
         "chat": [{"prompt": "فقط پرامپت"}],

@@ -94,6 +94,10 @@ header {
 .chat-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .chat-actions[hidden] { display: none; }
 
+/* Starter actions for the first message: one row, only while the panel is empty. */
+.starters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.starters .act { border-style: dashed; }
+
 .msg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 
 /* Action result: fetched from a separate Hermes chat, so it reads as an aside, not a turn. */

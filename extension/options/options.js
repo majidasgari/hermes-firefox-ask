@@ -5,6 +5,7 @@
 const BRIDGE = 'http://127.0.0.1:8790';
 const messageEl = document.getElementById('message');
 const chatEl = document.getElementById('chat');
+const startEl = document.getElementById('start');
 const statusEl = document.getElementById('status');
 
 const toLines = (items) => (items || []).map((item) => `${item.label} | ${item.prompt}`).join('\n');
@@ -34,6 +35,7 @@ async function load() {
     const data = await res.json();
     messageEl.value = toLines(data.message);
     chatEl.value = toLines(data.chat);
+    startEl.value = toLines(data.start);
     setStatus('');
   } catch (err) {
     setStatus('بریج در دسترس نیست — سرویس hermes-ask-bridge را اجرا کن');
@@ -45,11 +47,16 @@ async function save() {
     const res = await fetch(BRIDGE + '/actions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: parseLines(messageEl.value), chat: parseLines(chatEl.value) }),
+      body: JSON.stringify({
+        message: parseLines(messageEl.value),
+        chat: parseLines(chatEl.value),
+        start: parseLines(startEl.value),
+      }),
     });
     const data = await res.json();
     messageEl.value = toLines(data.message);
     chatEl.value = toLines(data.chat);
+    startEl.value = toLines(data.start);
     setStatus('ذخیره شد');
     setTimeout(() => setStatus(''), 2000);
   } catch (err) {

@@ -16,6 +16,7 @@ let busy = false;
 let userPicked = false;
 let messageActions = []; // {label, prompt} — one row of buttons under every message
 let chatActions = []; // {label, prompt} — one row of buttons above the composer
+let startActions = []; // {label, prompt} — shown while the panel has no messages yet
 let history = []; // {role, text} of the real conversation, for chat actions
 
 function renderText(el, text) {
@@ -127,6 +128,32 @@ async function runAction(action, target, anchor) {
   }
 }
 
+// Page context for actions that are about the page rather than a message or the conversation.
+async function pageTarget() {
+  const ctx = (await browser.runtime.sendMessage({ type: 'get-context' })) || {};
+  const selection = selectionRadio.checked ? (ctx.selection || pendingSelection || '').trim() : '';
+  if (selection) return { selection };
+  return { page: { url: ctx.url || '', title: ctx.title || '', text: ctx.text || '' } };
+}
+
+// The starter row: the "first message" actions, only while nothing has been asked yet.
+function renderStarters() {
+  const old = logEl.querySelector('.starters');
+  if (old) old.remove();
+  if (history.length || !startActions.length) return;
+  const box = document.createElement('div');
+  box.className = 'starters';
+  startActions.forEach((action) =>
+    box.append(
+      actionButton(action, async () => {
+        const target = await pageTarget();
+        runAction(action, target, null);
+      })
+    )
+  );
+  logEl.prepend(box);
+}
+
 function addMessage(role, text) {
   const el = document.createElement('div');
   el.className = 'msg ' + role;
@@ -137,6 +164,7 @@ function addMessage(role, text) {
   if ((role === 'user' || role === 'assistant') && text !== '…') history.push({ role, text: String(text) });
   logEl.append(el);
   logEl.scrollTop = logEl.scrollHeight;
+  renderStarters(); // no starters once the conversation has a message
   return el;
 }
 
@@ -162,11 +190,14 @@ async function loadActions() {
     const data = await res.json();
     messageActions = Array.isArray(data.message) ? data.message : [];
     chatActions = Array.isArray(data.chat) ? data.chat : [];
+    startActions = Array.isArray(data.start) ? data.start : [];
   } catch (err) {
     messageActions = [];
     chatActions = [];
+    startActions = [];
   }
   renderChatActions();
+  renderStarters();
 }
 
 function renderChatActions() {
@@ -273,6 +304,7 @@ document.getElementById('clear').addEventListener('click', () => {
   pendingSelection = '';
   showPreview('');
   addMessage('note', 'گفتگو پاک شد. پرسش بعدی یک نشست تازه در هرمس می‌سازد.');
+  renderStarters();
   refreshContext();
   questionEl.focus();
 });

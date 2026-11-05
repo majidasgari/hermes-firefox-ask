@@ -76,6 +76,10 @@ Two lists:
 |---|---|---|
 | **under each message** | a pill row under every question and answer | that one message's markdown + the prompt |
 | **under each chat** | a pill row above the composer | the whole conversation of the panel + the prompt |
+| **first message** | a dashed pill row inside the empty panel, gone after the first message | the selected text, or the whole page + the prompt |
+
+The *first message* group ships with «این صفحه را خلاصه کن» and is the quickest way to start: the answer
+comes back as a result card, so the panel's own conversation is still empty and ready for your question.
 
 An action never touches the conversation you are having: it runs **without** the panel's session id,
 so Hermes answers in a separate chat, and the reply is shown in its own card under the message (or at

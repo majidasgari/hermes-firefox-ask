@@ -42,6 +42,7 @@ window.fetch = async (url, opts = {}) => {
       json: async () => ({
         message: [{ label: 'خلاصه', prompt: 'این را خلاصه کن' }],
         chat: [{ label: 'این صفحه', prompt: 'این صفحه درباره چیست؟' }],
+        start: [{ label: 'این صفحه را خلاصه کن', prompt: 'این صفحه را در چند جمله خلاصه کن.' }],
       }),
     };
   }
@@ -64,24 +65,43 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 async function run() {
   await flush();
+  const log = window.document.getElementById('log');
 
   assert.strictEqual(window.document.getElementById('status').dataset.state, 'ok');
   assert.strictEqual(window.document.querySelector('input[value="selection"]').checked, true, 'selection pre-selected');
   assert.strictEqual(window.document.querySelector('input[value="selection"]').disabled, false);
   assert.match(window.document.getElementById('preview').textContent, /متن انتخاب‌شده/);
 
+  // Starter ("first message") action: visible while the panel is empty, runs in a separate chat,
+  // leaves the conversation empty.
+  const starters = window.document.querySelectorAll('#log .starters .act');
+  assert.strictEqual(starters.length, 1);
+  assert.strictEqual(starters[0].textContent, 'این صفحه را خلاصه کن');
+  starters[0].click();
+  await flush();
+  const starterRequest = posts.at(-1);
+  assert.strictEqual(starterRequest.question, 'این صفحه را در چند جمله خلاصه کن.');
+  assert.strictEqual(starterRequest.selection, 'متن انتخاب‌شده از صفحه', 'sends the current selection');
+  assert.strictEqual(starterRequest.session, undefined, 'starter runs in a separate chat');
+  assert.strictEqual(log.querySelectorAll('.msg.user, .msg.assistant').length, 0, 'conversation still empty');
+  const starterResult = log.querySelector('.msg.result');
+  assert.ok(starterResult && /پاسخ آزمایشی هرمس/.test(starterResult.textContent));
+  starterResult.remove();
+  window.document.querySelector('.starters')?.remove();
+
   const q = window.document.getElementById('q');
+  const beforeAsk = posts.length;
   q.value = 'این بخش یعنی چه؟';
   window.document.getElementById('send').click();
   await flush();
 
-  assert.strictEqual(posts.length, 1);
-  assert.strictEqual(posts[0].question, 'این بخش یعنی چه؟');
-  assert.strictEqual(posts[0].selection, 'متن انتخاب‌شده از صفحه', 'asked about the selection, not the page');
-  assert.strictEqual(posts[0].page.url, 'https://example.com/a');
-  assert.strictEqual(posts[0].session, null);
+  assert.strictEqual(posts.length, beforeAsk + 1);
+  assert.strictEqual(posts.at(-1).question, 'این بخش یعنی چه؟');
+  assert.strictEqual(posts.at(-1).selection, 'متن انتخاب‌شده از صفحه', 'asked about the selection, not the page');
+  assert.strictEqual(posts.at(-1).page.url, 'https://example.com/a');
+  assert.strictEqual(posts.at(-1).session, null);
+  assert.strictEqual(log.querySelector('.starters'), null, 'starters disappear after the first message');
 
-  const log = window.document.getElementById('log');
   assert.match(log.textContent, /پاسخ آزمایشی هرمس/);
   assert.match(log.textContent, /این بخش یعنی چه؟/);
 
@@ -97,7 +117,7 @@ async function run() {
   q.value = 'بیشتر توضیح بده';
   window.document.getElementById('send').click();
   await flush();
-  assert.strictEqual(posts[1].session, 'sess-1');
+  assert.strictEqual(posts.at(-1).session, 'sess-1');
 
   // Whole-page mode sends no selection.
   window.document.querySelector('input[value="page"]').checked = true;
@@ -105,8 +125,8 @@ async function run() {
   q.value = 'کل صفحه درباره چیست؟';
   window.document.getElementById('send').click();
   await flush();
-  assert.strictEqual(posts[2].selection, '');
-  assert.strictEqual(posts[2].page.text, 'کل متن صفحه');
+  assert.strictEqual(posts.at(-1).selection, '');
+  assert.strictEqual(posts.at(-1).page.text, 'کل متن صفحه');
 
   // Bridge down → a readable note, not a crash.
   window.fetch = async () => { throw new Error('offline'); };
