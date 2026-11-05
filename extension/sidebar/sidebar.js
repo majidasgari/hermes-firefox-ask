@@ -19,10 +19,48 @@ function renderText(el, text) {
   el.innerHTML = globalThis.HermesMarkdown.render(text);
 }
 
+function copyText(text) {
+  // execCommand path on purpose: navigator.clipboard.writeText needs the clipboardWrite
+  // permission, and adding a permission makes Firefox ask the user before every update.
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.cssText = 'position:fixed;top:-1000px;opacity:0;';
+  document.body.append(area);
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch (err) {
+    ok = false;
+  }
+  area.remove();
+  return ok;
+}
+
+function copyButton(text) {
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'copy';
+  btn.textContent = 'کپی';
+  btn.title = 'کپی مارک‌داون این پاسخ';
+  btn.addEventListener('click', () => {
+    btn.textContent = copyText(text) ? 'کپی شد' : 'کپی نشد';
+    setTimeout(() => {
+      btn.textContent = 'کپی';
+    }, 1500);
+  });
+  actions.append(btn);
+  return actions;
+}
+
 function addMessage(role, text) {
   const el = document.createElement('div');
   el.className = 'msg ' + role;
   renderText(el, text);
+  if (role === 'assistant' && text !== '…') el.append(copyButton(text));
   logEl.append(el);
   logEl.scrollTop = logEl.scrollHeight;
   return el;

@@ -39,6 +39,14 @@ window.fetch = async (url, opts = {}) => {
   return { ok: true, json: async () => ({ answer: 'پاسخ آزمایشی هرمس', session: 'sess-1' }) };
 };
 
+const copied = [];
+// jsdom has no execCommand: record the value of the textarea the copy path selects.
+window.document.execCommand = (cmd) => {
+  const area = window.document.querySelector('textarea[readonly]');
+  copied.push(cmd + ':' + (area ? area.value : ''));
+  return true;
+};
+
 window.eval(fs.readFileSync(path.join(root, 'markdown.js'), 'utf8'));
 window.eval(fs.readFileSync(path.join(root, 'sidebar.js'), 'utf8'));
 
@@ -66,6 +74,14 @@ async function run() {
   const log = window.document.getElementById('log');
   assert.match(log.textContent, /پاسخ آزمایشی هرمس/);
   assert.match(log.textContent, /این بخش یعنی چه؟/);
+
+  // Copy button on an answer hands the raw markdown (not the rendered text) to the clipboard.
+  const copyBtn = log.querySelector('.msg.assistant .copy');
+  assert.ok(copyBtn, 'assistant answer has a copy button');
+  copyBtn.click();
+  await flush();
+  assert.deepStrictEqual(copied, ['copy:پاسخ آزمایشی هرمس']);
+  assert.strictEqual(copyBtn.textContent, 'کپی شد');
 
   // Follow-up reuses the session the bridge returned.
   q.value = 'بیشتر توضیح بده';

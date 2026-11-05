@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "پرسش از هرمس",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "بخشی از صفحه یا کل آن را انتخاب کن و از هرمس بپرس؛ پاسخ در نوار کناری می‌آید.",
   "browser_specific_settings": {
     "gecko": {
