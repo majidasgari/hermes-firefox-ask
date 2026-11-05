@@ -74,8 +74,13 @@ Two lists:
 
 | list | where the buttons appear | what is sent |
 |---|---|---|
-| **under each message** | a pill row under every question and answer | that message's markdown + the prompt |
-| **under each chat** | a pill row above the composer | the selected text (or the whole page) + the prompt |
+| **under each message** | a pill row under every question and answer | that one message's markdown + the prompt |
+| **under each chat** | a pill row above the composer | the whole conversation of the panel + the prompt |
+
+An action never touches the conversation you are having: it runs **without** the panel's session id,
+so Hermes answers in a separate chat, and the reply is shown in its own card under the message (or at
+the end of the panel) with a copy button and a × to dismiss it. The panel's own chat — messages,
+session, follow-ups — stays exactly as it was.
 
 The same list lives in `~/.config/hermes-firefox-ask/actions.json` (the bridge owns it, `GET/PUT
 /actions`), so it can be edited there with any text editor. Defaults are created on first run; empty

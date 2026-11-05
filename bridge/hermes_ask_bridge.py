@@ -23,6 +23,8 @@ PORT = int(os.environ.get("HERMES_ASK_PORT", "8790"))
 HERMES = os.environ.get("HERMES_BIN", os.path.expanduser("~/.local/bin/hermes"))
 CTX_MAX = 30000
 SEL_MAX = 12000
+TEXT_MAX = 20000      # one message handed to an action
+TRANSCRIPT_MAX = 60000  # whole panel conversation handed to a chat action
 TIMEOUT = 240
 # Tools are limited to `web` on purpose: the page text is untrusted input, so the
 # ask-turn must not be able to touch the filesystem or a shell.
@@ -82,13 +84,24 @@ def build_prompt(payload: dict) -> str:
     page = payload.get("page") or {}
     selection = (payload.get("selection") or "").strip()
     text = (page.get("text") or "").strip()
+    message = (payload.get("text") or "").strip()
+    transcript = (payload.get("transcript") or "").strip()
     question = (payload.get("question") or "").strip()
-    parts = [PROMPT_HEAD.format(url=page.get("url", ""), title=page.get("title", ""))]
-    if selection:
-        parts.append("متن مورد نظر کاربر (بخشی از صفحه یا یکی از پیام‌های همین گفتگو):\n<<<\n"
-                     + selection[:SEL_MAX] + "\n>>>")
-    elif text:
-        parts.append("متن صفحه (ممکن است ناقص باشد):\n<<<\n" + text[:CTX_MAX] + "\n>>>")
+    parts = []
+    if transcript:
+        # An action over the whole panel conversation: the page has nothing to do with it.
+        parts.append("متن کامل گفتگوی کاربر با دستیار در این پنل (پرسش‌ها و پاسخ‌ها):\n<<<\n"
+                     + transcript[:TRANSCRIPT_MAX] + "\n>>>")
+    else:
+        parts.append(PROMPT_HEAD.format(url=page.get("url", ""), title=page.get("title", "")))
+        if message:
+            parts.append("متنی که این درخواست درباره آن است (یک پیام از گفتگو):\n<<<\n"
+                         + message[:TEXT_MAX] + "\n>>>")
+        elif selection:
+            parts.append("متن مورد نظر کاربر (بخشی از صفحه یا یکی از پیام‌های همین گفتگو):\n<<<\n"
+                         + selection[:SEL_MAX] + "\n>>>")
+        elif text:
+            parts.append("متن صفحه (ممکن است ناقص باشد):\n<<<\n" + text[:CTX_MAX] + "\n>>>")
     parts.append("پرسش کاربر:\n" + question)
     return "\n\n".join(parts)
 
@@ -200,6 +213,13 @@ def selftest() -> None:
     assert "کل صفحه" in p and "انتخاب کرده" not in p, p
     assert len(build_prompt({**base, "page": {**base["page"], "text": "x" * 99999}})) < CTX_MAX + 2000
     assert len(build_prompt({**base, "selection": "x" * 99999})) < SEL_MAX + 2000
+    # An action's payload: one message wins over the selection/page text.
+    p = build_prompt({**base, "selection": "sel-1", "text": "msg-1", "page": {**base["page"], "text": "page-1"}})
+    assert "msg-1" in p and "sel-1" not in p and "page-1" not in p, p
+    # A chat action sends the whole conversation and drops the page header entirely.
+    p = build_prompt({**base, "text": "msg-1", "transcript": "chat-1", "page": {**base["page"], "text": "page-1"}})
+    assert "chat-1" in p and "msg-1" not in p and "نشانی:" not in p, p
+    assert len(build_prompt({**base, "transcript": "x" * 99999})) < TRANSCRIPT_MAX + 2000
     assert _chat_cmd("f", None)[-2:] == ["--query-file", "f"]
     assert _chat_cmd("f", "abc")[-4:] == ["--resume", "abc", "--query-file", "f"]
 

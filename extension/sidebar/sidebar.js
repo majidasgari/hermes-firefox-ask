@@ -16,6 +16,7 @@ let busy = false;
 let userPicked = false;
 let messageActions = []; // {label, prompt} — one row of buttons under every message
 let chatActions = []; // {label, prompt} — one row of buttons above the composer
+let history = []; // {role, text} of the real conversation, for chat actions
 
 function renderText(el, text) {
   // Markdown → HTML, with per-block RTL/LTR decided inside HermesMarkdown.
@@ -69,9 +70,61 @@ function actionButton(action, onClick) {
 function actionRow(role, text) {
   const row = document.createElement('div');
   row.className = 'msg-actions';
-  messageActions.forEach((action) => row.append(actionButton(action, () => send(action.prompt, text))));
+  messageActions.forEach((action) =>
+    row.append(actionButton(action, (event) => runAction(action, { text }, event.currentTarget.closest('.msg'))))
+  );
   if (role === 'assistant') row.append(copyButton(text));
   return row.childElementCount ? row : null;
+}
+
+// The panel conversation as plain text, for chat actions.
+function transcript() {
+  return history
+    .map((entry) => (entry.role === 'user' ? 'کاربر: ' : 'هرمس: ') + entry.text)
+    .join('\n\n');
+}
+
+// An action never touches this conversation: no session id, no message in the history —
+// the result lands in its own card, fetched from a separate Hermes chat.
+async function runAction(action, target, anchor) {
+  const card = document.createElement('div');
+  card.className = 'msg result';
+  const head = document.createElement('div');
+  head.className = 'result-head';
+  const title = document.createElement('span');
+  title.className = 'result-title';
+  title.dir = 'auto';
+  title.textContent = action.label;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'copy';
+  close.textContent = '×';
+  close.title = 'بستن این نتیجه';
+  close.addEventListener('click', () => card.remove());
+  const body = document.createElement('div');
+  body.className = 'result-body';
+  renderText(body, '…');
+  head.append(title, close);
+  card.append(head, body);
+  if (anchor) anchor.after(card);
+  else logEl.append(card);
+  if (typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'nearest' });
+
+  try {
+    const res = await fetch(BRIDGE + '/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ question: action.prompt }, target)),
+    });
+    const data = await res.json();
+    const answer = data.answer || data.error || 'پاسخی نیامد.';
+    renderText(body, answer);
+    head.insertBefore(copyButton(answer), close);
+    setStatus('ok');
+  } catch (err) {
+    renderText(body, 'به بریج هرمس وصل نشدم (۱۲۷.۰.۰.۱:۸۷۹۰).');
+    setStatus('down');
+  }
 }
 
 function addMessage(role, text) {
@@ -81,6 +134,7 @@ function addMessage(role, text) {
   const actionable = (role === 'assistant' || role === 'user') && text !== '…' && String(text).trim();
   const row = actionable ? actionRow(role, text) : null;
   if (row) el.append(row);
+  if ((role === 'user' || role === 'assistant') && text !== '…') history.push({ role, text: String(text) });
   logEl.append(el);
   logEl.scrollTop = logEl.scrollHeight;
   return el;
@@ -117,7 +171,18 @@ async function loadActions() {
 
 function renderChatActions() {
   chatActionsEl.replaceChildren();
-  chatActions.forEach((action) => chatActionsEl.append(actionButton(action, () => send(action.prompt))));
+  chatActions.forEach((action) =>
+    chatActionsEl.append(
+      actionButton(action, () => {
+        const text = transcript();
+        if (!text) {
+          addMessage('note', 'هنوز گفتگویی نیست که اکشن روی آن اجرا شود.');
+          return;
+        }
+        runAction(action, { transcript: text }, null);
+      })
+    )
+  );
   chatActionsEl.hidden = chatActions.length === 0;
 }
 
@@ -151,17 +216,12 @@ async function ask() {
   await send(question);
 }
 
-// selectionOverride: the text a message action is about; undefined = follow the page/selection choice.
-async function send(question, selectionOverride) {
+// One turn of this panel's own conversation (page/selection context, resumed session).
+async function send(question) {
   if (!question || busy) return;
   const ctx = (await browser.runtime.sendMessage({ type: 'get-context' })) || {};
-  const useSelection = selectionOverride === undefined && selectionRadio.checked;
-  const selection =
-    selectionOverride !== undefined
-      ? String(selectionOverride)
-      : useSelection
-        ? (ctx.selection || pendingSelection || '').trim()
-        : '';
+  const useSelection = selectionRadio.checked;
+  const selection = useSelection ? (ctx.selection || pendingSelection || '').trim() : '';
   if (useSelection && !selection) {
     addMessage('note', 'چیزی در صفحه انتخاب نشده است. بخشی از متن را انتخاب کن و دوباره بپرس.');
     return;
@@ -209,6 +269,7 @@ document.getElementById('settings').addEventListener('click', () => browser.runt
 document.getElementById('clear').addEventListener('click', () => {
   logEl.replaceChildren();
   hermesSession = null; // next question opens a fresh Hermes session
+  history = [];
   pendingSelection = '';
   showPreview('');
   addMessage('note', 'گفتگو پاک شد. پرسش بعدی یک نشست تازه در هرمس می‌سازد.');

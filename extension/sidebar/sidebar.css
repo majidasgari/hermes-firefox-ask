@@ -96,6 +96,24 @@ header {
 
 .msg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 
+/* Action result: fetched from a separate Hermes chat, so it reads as an aside, not a turn. */
+.msg.result {
+  border: 1px solid var(--accent);
+  border-inline-start-width: 3px;
+  background: var(--code-bg);
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.result-title { font-size: 12px; font-weight: 600; color: var(--accent); }
+.result-body { font-size: 13px; }
+
 .copy {
   font: inherit;
   font-size: 12px;

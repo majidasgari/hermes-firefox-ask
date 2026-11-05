@@ -132,29 +132,64 @@ async function run() {
   assert.strictEqual(posts.at(-1).session, null, 'cleared conversation must not resume the old session');
 
   // Configured actions: one row above the composer, one under each message.
+  // Fresh bridge stub for this section: it answers with a session id of its own, so the test can
+  // prove an action never adopts it.
+  window.fetch = async (url, opts = {}) => {
+    const target = String(url);
+    if (target.endsWith('/health')) return { ok: true, json: async () => ({ ok: true }) };
+    posts.push(JSON.parse(opts.body));
+    return { ok: true, json: async () => ({ answer: 'پاسخ آزمایشی هرمس', session: 'sess-action' }) };
+  };
   const chatActs = [...window.document.querySelectorAll('#chat-actions .act')];
   assert.strictEqual(chatActs.length, 1);
   assert.strictEqual(chatActs[0].textContent, 'این صفحه');
 
-  const lastAnswer = [...window.document.querySelectorAll('#log .msg.assistant')].at(-1);
+  const beforeAction = log.querySelectorAll('.msg.user, .msg.assistant').length;
+  const lastAnswer = [...log.querySelectorAll('.msg.assistant')].at(-1);
   const msgAct = lastAnswer.querySelector('.msg-actions .act');
   assert.ok(msgAct, 'message action under an answer');
-  const beforeMsg = posts.length;
   msgAct.click();
   await flush();
-  assert.strictEqual(posts.length, beforeMsg + 1);
-  assert.strictEqual(posts.at(-1).question, 'این را خلاصه کن');
-  assert.strictEqual(posts.at(-1).selection, lastAnswer.querySelector('p').textContent, 'message text goes as the selection');
 
-  const beforeChat = posts.length;
+  // A message action sends that one message to a SEPARATE Hermes chat: no session, no new turn.
+  const msgRequest = posts.at(-1);
+  assert.strictEqual(msgRequest.question, 'این را خلاصه کن');
+  assert.strictEqual(msgRequest.text, lastAnswer.querySelector('p').textContent);
+  assert.strictEqual(msgRequest.selection, undefined, 'the page selection is not involved');
+  assert.strictEqual(msgRequest.session, undefined, 'never resumes this chat');
+  assert.strictEqual(log.querySelectorAll('.msg.user, .msg.assistant').length, beforeAction, 'chat untouched');
+  const resultCard = lastAnswer.nextElementSibling;
+  assert.ok(resultCard && resultCard.classList.contains('result'), 'result card sits under the message');
+  assert.match(resultCard.textContent, /پاسخ آزمایشی هرمس/);
+  assert.strictEqual(resultCard.querySelector('.result-title').textContent, 'خلاصه');
+  assert.strictEqual(msgRequest.transcript, undefined);
+
+  // The panel session is unchanged by the action: the next normal turn still resumes it.
+  q.value = 'سؤال بعدی';
+  window.document.getElementById('send').click();
+  await flush();
+  assert.strictEqual(posts.at(-1).session, 'sess-2', 'action session id was not adopted');
+  const afterTurn = log.querySelectorAll('.msg.user, .msg.assistant').length;
+  assert.strictEqual(afterTurn, beforeAction + 2, 'the normal turn still appends question + answer');
+
+  // A chat action sends the WHOLE conversation, not the page.
   const pageInput = window.document.querySelector('input[value="page"]');
   pageInput.checked = true;
   pageInput.dispatchEvent(new window.Event('change'));
   chatActs[0].click();
   await flush();
-  assert.strictEqual(posts.at(-1).question, 'این صفحه درباره چیست؟');
-  assert.strictEqual(posts.at(-1).selection, '', 'chat action uses the page, not the message');
-  assert.strictEqual(posts.length, beforeChat + 1);
+  const chatRequest = posts.at(-1);
+  assert.strictEqual(chatRequest.question, 'این صفحه درباره چیست؟');
+  assert.strictEqual(chatRequest.session, undefined);
+  assert.match(chatRequest.transcript, /^کاربر: سؤال تازه/);
+  assert.match(chatRequest.transcript, /هرمس: ب/);
+  assert.match(chatRequest.transcript, /کاربر: سؤال بعدی/);
+  assert.strictEqual(
+    chatRequest.transcript.split('پاسخ آزمایشی هرمس').length - 1,
+    1,
+    'the action result card is not part of the chat transcript'
+  );
+  assert.strictEqual(log.lastElementChild.classList.contains('result'), true, 'chat action result at the end');
 
   console.log('sidebar.test.js ok');
 }
